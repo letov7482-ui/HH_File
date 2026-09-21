@@ -1,8 +1,8 @@
 # HH_Cheat/build/pack.py
-import subprocess, shutil, json, base64
+import subprocess, shutil, json, base64, os
 from pathlib import Path
 
-PATCH_NAME = "game_patch_4.6.0.21565"   # ← ЗАМЕНИ на актуальное
+PATCH_NAME = os.environ.get("PATCH_NAME", "game_patch_4.6.0.21565")
 
 ROOT       = Path(__file__).resolve().parent.parent
 OUT        = ROOT / "out"
@@ -43,12 +43,9 @@ def main():
     PAK_SECURITY_BOOT.write_text('require("HH_loader").boot()\n')
 
     out_pak = OUT / f"{PATCH_NAME}.pak"
+    # repak pack — кроссплатформенный
     subprocess.run([
-        "UnrealPak", str(out_pak),
-        f"-create={STAGE}",
-        "-compress",
-        # "-encrypt",
-        # "-aes=<AES_KEY>",
+        "repak", "pack", str(STAGE), str(out_pak)
     ], check=True)
     print(f"[pack] готов: {out_pak}")
 
