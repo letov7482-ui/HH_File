@@ -6,7 +6,6 @@ local FormatLog = FuncUtil.FormatLog
 local _installed = false
 
 -- === утилита обёртки ===
--- wrap(tbl, name, post) — после оригинала вызывает post(self, ...)
 function M.wrap(tbl, name, post)
     if not tbl or not tbl[name] then return false end
     local orig = tbl[name]
@@ -22,12 +21,18 @@ end
 
 -- === главный тик ===
 local function tick_all(ctx)
+    -- паника — стоп всему
     if _G._HH_PANIC then return end
 
     local ok, err = pcall(function()
+        -- guard: следим за аномальной активностью
         if ctx.antibypass and ctx.antibypass.tick_guard then
             ctx.antibypass.tick_guard()
         end
+
+        -- после guard мог сработать паника
+        if _G._HH_PANIC then return end
+
         if ctx.esp   and ctx.esp.tick   then ctx.esp.tick()   end
         if ctx.chams and ctx.chams.tick then ctx.chams.tick() end
         if ctx.aim   and ctx.aim.tick   then ctx.aim.tick()   end
@@ -45,9 +50,7 @@ function M.install(ctx)
         return
     end
 
-    -- Пробуем несколько путей — какой сработает
-
-    -- 1. ReceiveTick на PlayerController (лучший вариант — каждый кадр)
+    -- 1. ReceiveTick на PlayerController (лучший — каждый кадр)
     local PC = import("/Script/ShadowTrackerExtra.STExtraPlayerController")
     if PC and PC.ReceiveTick then
         local ok = M.wrap(PC, "ReceiveTick", function()
@@ -73,10 +76,11 @@ function M.install(ctx)
         end
     end
 
-    -- 3. Через HawkEyeDistanceUI:_RefreshUI (три раза в секунду)
-    local HawkEyeDistanceUI = require("GameLua.Mod.BaseMod.Client.Security.UI.HawkEyeDistanceUI")
-    if HawkEyeDistanceUI and HawkEyeDistanceUI._RefreshUI then
-        local ok = M.wrap(HawkEyeDistanceUI, "_RefreshUI", function(self, ...)
+    -- 3. Через HawkEyeDistanceUI:_RefreshUI (3 раза в секунду)
+    local ok_req, HawkEyeDistanceUI = pcall(require,
+        "GameLua.Mod.BaseMod.Client.Security.UI.HawkEyeDistanceUI")
+    if ok_req and HawkEyeDistanceUI and HawkEyeDistanceUI._RefreshUI then
+        local ok = M.wrap(HawkEyeDistanceUI, "_RefreshUI", function()
             tick_all(ctx)
         end)
         if ok then
@@ -86,8 +90,7 @@ function M.install(ctx)
         end
     end
 
-    -- 4. Через ClientHawkEyePatrolSubsystem:_StartFrameUIRefreshTimer
-    -- (таймер раз в секунду — медленно, но работает)
+    -- 4. Через SubsystemMgr (таймер 30мс — медленно, но работает)
     local sub = SubsystemMgr:Get("ClientHawkEyePatrolSubsystem")
     if sub then
         sub:AddGameTimer(0.033, true, function()
