@@ -1,43 +1,50 @@
 -- src/menu/menu.lua
--- Override оригинального HawkEyeReportWindow — наполняем его нашим содержимым
+-- Override HawkEyeReportWindow: используем это окно как меню чита
 local ASTExtraPlayerController = import("/Script/ShadowTrackerExtra.STExtraPlayerController")
 local FormatLog = FuncUtil.FormatLog
 local HawkEyeReportWindow = {}
 
-local ctx  -- устанавливается из main.lua через M.init(ctx)
 local _TABS = {"ESP", "Chams", "Aimbot", "Config"}
 local _activeTab = 1
 
--- === схема настроек ===
+-- ctx берём из глобального реестра (устанавливается в core/main.lua)
+local function ctx()
+    return _G._HH_CTX
+end
+
+-- === схема пунктов текущего таба ===
 local function build_items()
-    local c = ctx.config.data
-    if _activeTab == 1 then
+    local c = ctx()
+    if not c then return {} end
+    local d = c.config.data
+
+    if _activeTab == 1 then -- ESP
         return {
-            {id="esp_en",    label="Enable",       kind="toggle", get=function() return c.esp.enabled end,     set=function(v) c.esp.enabled = v end},
-            {id="esp_tm",    label="Team check",   kind="toggle", get=function() return c.esp.team_check end,  set=function(v) c.esp.team_check = v end},
-            {id="esp_dist",  label="Max distance", kind="slider", get=function() return c.esp.max_distance end,set=function(v) c.esp.max_distance = v end, min=50, max=800, step=10},
-            {id="esp_box",   label="Box",          kind="toggle", get=function() return c.esp.box end,         set=function(v) c.esp.box = v end},
+            {label = "Enable",       kind = "toggle", get = function() return d.esp.enabled end,      set = function(v) d.esp.enabled = v end},
+            {label = "Team check",   kind = "toggle", get = function() return d.esp.team_check end,   set = function(v) d.esp.team_check = v end},
+            {label = "Max distance", kind = "slider", get = function() return d.esp.max_distance end, set = function(v) d.esp.max_distance = v end, min = 50, max = 800, step = 10},
+            {label = "Box",          kind = "toggle", get = function() return d.esp.box end,          set = function(v) d.esp.box = v end},
         }
-    elseif _activeTab == 2 then
+    elseif _activeTab == 2 then -- Chams
         return {
-            {id="ch_en",     label="Enable",       kind="toggle", get=function() return c.chams.enabled end,     set=function(v) c.chams.enabled = v end},
-            {id="ch_tm",     label="Team check",   kind="toggle", get=function() return c.chams.team_check end,  set=function(v) c.chams.team_check = v end},
-            {id="ch_vis",    label="Stencil vis",  kind="slider", get=function() return c.chams.stencil_visible end, set=function(v) c.chams.stencil_visible = v end, min=0, max=255, step=1},
-            {id="ch_beh",    label="Stencil behind",kind="slider",get=function() return c.chams.stencil_behind end,  set=function(v) c.chams.stencil_behind = v end,  min=0, max=255, step=1},
+            {label = "Enable",         kind = "toggle", get = function() return d.chams.enabled end,         set = function(v) d.chams.enabled = v end},
+            {label = "Team check",     kind = "toggle", get = function() return d.chams.team_check end,      set = function(v) d.chams.team_check = v end},
+            {label = "Stencil vis",    kind = "slider", get = function() return d.chams.stencil_visible end, set = function(v) d.chams.stencil_visible = v end, min = 0, max = 255, step = 1},
+            {label = "Stencil behind", kind = "slider", get = function() return d.chams.stencil_behind end,  set = function(v) d.chams.stencil_behind = v end,  min = 0, max = 255, step = 1},
         }
-    elseif _activeTab == 3 then
+    elseif _activeTab == 3 then -- Aimbot
         return {
-            {id="am_en",     label="Enable",       kind="toggle", get=function() return c.aim.enabled end,      set=function(v) c.aim.enabled = v end},
-            {id="am_tm",     label="Team check",   kind="toggle", get=function() return c.aim.team_check end,   set=function(v) c.aim.team_check = v end},
-            {id="am_bone",   label="Bone",         kind="choice", get=function() return c.aim.bone end,         set=function(v) c.aim.bone = v end, opts={"head","body"}},
-            {id="am_fov",    label="FOV distance", kind="slider", get=function() return c.aim.fov_distance end, set=function(v) c.aim.fov_distance = v end, min=10, max=500, step=10},
-            {id="am_sm",     label="Smooth",       kind="slider", get=function() return c.aim.smooth end,       set=function(v) c.aim.smooth = v end, min=1, max=20, step=1},
+            {label = "Enable",       kind = "toggle", get = function() return d.aim.enabled end,        set = function(v) d.aim.enabled = v end},
+            {label = "Team check",   kind = "toggle", get = function() return d.aim.team_check end,     set = function(v) d.aim.team_check = v end},
+            {label = "Bone",         kind = "choice", get = function() return d.aim.bone end,           set = function(v) d.aim.bone = v end, opts = {"head", "body"}},
+            {label = "FOV distance", kind = "slider", get = function() return d.aim.fov_distance end,   set = function(v) d.aim.fov_distance = v end, min = 10, max = 500, step = 10},
+            {label = "Smooth",       kind = "slider", get = function() return d.aim.smooth end,         set = function(v) d.aim.smooth = v end, min = 1, max = 20, step = 1},
         }
-    else
+    else -- Config
         return {
-            {id="cf_save",   label="Save config",  kind="button", action=function() ctx.config.save() end},
-            {id="cf_reset",  label="Reset",        kind="button", action=function() ctx.config.reset() end},
-            {id="cf_close",  label="Close",        kind="button", action=function() HawkEyeReportWindow:_OnClickHide() end},
+            {label = "Save config", kind = "button", action = function() c.config.save() end},
+            {label = "Reset",       kind = "button", action = function() c.config.reset() end},
+            {label = "Close",       kind = "button", action = function() HawkEyeReportWindow:_OnClickHide() end},
         }
     end
 end
@@ -70,7 +77,6 @@ function HawkEyeReportWindow:_RefreshWindow()
 end
 
 function HawkEyeReportWindow:_RefreshTabHeader()
-    -- заголовок = текущий таб
     local title = self.UIRoot.Common_Popup_Large_UIBP
     if title and title.Title then
         title.Title:SetText("HH  [" .. _TABS[_activeTab] .. "]")
@@ -87,24 +93,23 @@ function HawkEyeReportWindow:_RefreshList()
     self._LoopGridReason:RefreshAllItems()
 end
 
--- === рендер одного item ===
+-- === рендер строки списка ===
 function HawkEyeReportWindow:_OnRefreshReasonItem(uWidget, nIndex)
     local item = self._LoopGridReason:GetItemData(nIndex)
     if not item then return end
 
-    local label_text = item.label
+    local text = item.label
     if item.kind == "slider" then
-        label_text = string.format("%s: %d", item.label, item.get())
+        text = string.format("%s: %d", item.label, item.get())
     elseif item.kind == "choice" then
-        label_text = string.format("%s: %s", item.label, tostring(item.get()))
+        text = string.format("%s: %s", item.label, tostring(item.get()))
     elseif item.kind == "toggle" then
-        label_text = string.format("%s: %s", item.label, item.get() and "ON" or "OFF")
+        text = string.format("%s: %s", item.label, item.get() and "ON" or "OFF")
     end
 
-    if uWidget.TextBlock_38 then uWidget.TextBlock_38:SetText(label_text) end
-    if uWidget.TextBlock_40 then uWidget.TextBlock_40:SetText(label_text) end
+    if uWidget.TextBlock_38 then uWidget.TextBlock_38:SetText(text) end
+    if uWidget.TextBlock_40 then uWidget.TextBlock_40:SetText(text) end
 
-    -- индикатор toggle (1 = ON, 0 = OFF)
     if uWidget.WidgetSwitcher_3 then
         if item.kind == "toggle" and item.get() then
             uWidget.WidgetSwitcher_3:SetActiveWidgetIndex(1)
@@ -114,17 +119,11 @@ function HawkEyeReportWindow:_OnRefreshReasonItem(uWidget, nIndex)
     end
 end
 
--- === действия по кнопкам в item ===
--- Button_6 = основной клик (toggle / - / prev)
--- Button_7 = правый клик (+ / next)
+-- === клик по строке ===
 function HawkEyeReportWindow:_OnClickReasonItem(uWidget, nIndex)
     self:PlayAudio(sound_config.click_v1)
     local item = self._LoopGridReason:GetItemData(nIndex)
     if not item then return end
-
-    local which = "Button_6"  -- определить по виджету сложно, обработаем оба сценария
-    -- (в реальном slua здесь придёт имя контрола, но HawkEye не даёт — используем эвристику по nIndex)
-    -- для простоты: любой клик по item делает основное действие
 
     if item.kind == "toggle" then
         item.set(not item.get())
@@ -138,8 +137,8 @@ function HawkEyeReportWindow:_OnClickReasonItem(uWidget, nIndex)
                 break
             end
         end
-    elseif item.kind == "button" then
-        if item.action then item.action() end
+    elseif item.kind == "button" and item.action then
+        item.action()
     end
 
     self:_RefreshWindow()
@@ -156,32 +155,13 @@ end
 -- === кнопка close (Button_2) ===
 function HawkEyeReportWindow:_OnClickHide()
     self:PlayAudio(sound_config.click_v1)
-    ctx.config.save()
+    local c = ctx()
+    if c then c.config.save() end
     self:Hide()
 end
 
 function HawkEyeReportWindow:OnAndroidBack()
     self:_OnClickHide()
-end
-
--- === точка входа ===
-function HawkEyeReportWindow.init(c)
-    ctx = c
-    FuncUtil.FormatLog("[HH] menu bound to HawkEyeReportWindow")
-end
-
-function HawkEyeReportWindow.open()
-    UIManager.ShowUI(UIManager.UI_Config_InGame.HawkEyeReportWindow)
-end
-
-function HawkEyeReportWindow.toggle()
-    -- проверим открыто ли
-    local ui = UIManager.GetUI(UIManager.UI_Config_InGame.HawkEyeReportWindow)
-    if ui and ui.UIRoot and ui.UIRoot:IsVisible() then
-        ui:Hide()
-    else
-        HawkEyeReportWindow.open()
-    end
 end
 
 local class = require("class")
