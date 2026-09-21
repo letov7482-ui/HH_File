@@ -1,0 +1,6 @@
+key.json
+../out/
+*.pak
+*.sig
+../vendor/*.original.lua
+__pycache__/
