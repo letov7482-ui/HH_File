@@ -8,7 +8,6 @@ function M.start(manifest, loader)
     local esp    = loader.load("features/esp.lua",   manifest)
     local chams  = loader.load("features/chams.lua", manifest)
     local aim    = loader.load("features/aim.lua",   manifest)
-    local menu   = loader.load("menu/menu.lua",      manifest)
 
     if not (sdk and hook and config) then
         FuncUtil.FormatLog("[HH] core modules failed")
@@ -16,11 +15,13 @@ function M.start(manifest, loader)
     end
 
     local ctx = {sdk = sdk, config = config, esp = esp, chams = chams, aim = aim}
+    _G._HH_CTX = ctx
+
     config.init()
-    esp.init(ctx)
-    chams.init(ctx)
-    aim.init(ctx)
-    menu.init(ctx)
+    if esp   and esp.init   then esp.init(ctx)   end
+    if chams and chams.init then chams.init(ctx) end
+    if aim   and aim.init   then aim.init(ctx)   end
+
     hook.install(ctx)
 
     FuncUtil.FormatLog("[HH] loaded ok")
