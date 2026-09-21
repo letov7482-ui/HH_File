@@ -5,9 +5,9 @@ local M = {}
 local FormatLog = FuncUtil.FormatLog
 local ctx
 
-local _current_target   -- текущая цель
-local _last_switch_time -- время последнего переключения
-local _activated_at     -- время активации (для задержки после включения)
+local _current_target
+local _last_switch_time
+local _activated_at
 
 function M.init(c)
     ctx = c
@@ -23,7 +23,6 @@ local function pick_target(pc)
     local my_team = ctx.sdk.get_team(me)
     local my_head = ctx.sdk.get_head(me) or my_loc
 
-    -- углы камеры
     local cam_rot = ctx.sdk.get_control_rotation(pc)
     if not cam_rot then return nil end
 
@@ -40,14 +39,12 @@ local function pick_target(pc)
                 if target_pos then
                     local dist = ctx.sdk.distance_2d(my_loc, target_loc or target_pos)
                     if dist <= cfg.fov_distance then
-                        -- угловое отклонение от центра экрана
                         local want = (target_pos - my_head):Rotation()
                         local d_pitch = math.abs(want.Pitch - cam_rot.Pitch)
                         local d_yaw   = math.abs(want.Yaw   - cam_rot.Yaw)
                         if d_yaw > 180 then d_yaw = 360 - d_yaw end
                         local angle = math.sqrt(d_pitch * d_pitch + d_yaw * d_yaw)
 
-                        -- приоритет: ближайший по углу, потом по дистанции
                         local score = angle + dist * 0.01
                         if score < best_score then
                             best, best_score = pawn, score
@@ -79,13 +76,16 @@ end
 
 -- === основной тик ===
 function M.tick()
+    -- паника — стоп
+    if _G._HH_PANIC then return end
+
     local cfg = ctx.config.data.aim
     if not cfg.enabled then
         _activated_at = nil
         return
     end
 
-    -- задержка после включения (антидетект)
+    -- задержка активации
     if not _activated_at then
         _activated_at = os.clock()
         return
@@ -97,17 +97,31 @@ function M.tick()
     local pc = ctx.sdk.get_player_controller()
     if not slua.isValid(pc) then return end
 
+    local cur = ctx.sdk.get_control_rotation(pc)
+    if not cur then return end
+
+    -- проверка на снап: не даём aimbot'у дать резкий поворот
+    if ctx.antibypass and ctx.antibypass.check_snap then
+        if not ctx.antibypass.check_snap(cur) then
+            return
+        end
+    end
+
     local target = pick_target(pc)
     if not target then
         _current_target = nil
         return
     end
 
-    -- антидетект: не переключаться слишком часто
+    -- антидетект: не переключаться слишком часто (с рандомом)
     if _current_target ~= target then
         local now = os.clock()
-        if _last_switch_time and (now - _last_switch_time) < 0.3 then
-            target = _current_target or target  -- держим старую
+        local min_delay = 0.3
+        if ctx.antibypass and ctx.antibypass.rand_delay then
+            min_delay = ctx.antibypass.rand_delay(0.3)
+        end
+        if _last_switch_time and (now - _last_switch_time) < min_delay then
+            target = _current_target or target
         else
             _current_target = target
             _last_switch_time = now
@@ -129,8 +143,6 @@ function M.tick()
 
     -- желаемый поворот
     local want = (bone - my_head):Rotation()
-    local cur  = ctx.sdk.get_control_rotation(pc)
-    if not cur then return end
 
     -- плавность
     local smooth = math.max(1, cfg.smooth)
@@ -138,7 +150,7 @@ function M.tick()
 
     local blended = lerp_rot(cur, want, t)
 
-    -- джиттер (антидетект — не идеально ровно)
+    -- джиттер
     if ctx.antibypass and ctx.antibypass.jitter_rotation then
         blended = ctx.antibypass.jitter_rotation(blended, 0.12)
     end
