@@ -1,0 +1,62 @@
+name: HH Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      patch_name:
+        description: 'Имя game_patch (напр. game_patch_4.6.0.21565)'
+        required: true
+        default: 'game_patch_4.6.0.21565'
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install repak
+        run: |
+          curl -L https://github.com/trumank/repak/releases/latest/download/repak_cli-x86_64-unknown-linux-gnu.tar.gz -o repak.tgz
+          tar -xzf repak.tgz
+          sudo mv repak /usr/local/bin/
+          repak --version
+
+      - name: Keygen
+        run: python3 build/keygen.py
+
+      - name: Extract original SecurityCommonUtils
+        run: |
+          mkdir -p /tmp/extract
+          # если оригинала нет в репо — надо залить его как artifact или положить в vendor/
+          if [ ! -f vendor/SecurityCommonUtils.original.lua ]; then
+            echo "ERROR: vendor/SecurityCommonUtils.original.lua отсутствует"
+            exit 1
+          fi
+
+      - name: Encrypt
+        run: python3 build/encrypt.py
+
+      - name: Pack PAK
+        run: |
+          # repak не создаёт паки, используем UnrealPak или repak pack
+          python3 build/pack.py || echo "UnrealPak недоступен, используем repak pack"
+          if [ ! -f out/${PATCH_NAME}.pak ]; then
+            repak pack out/pak_stage out/${{ github.event.inputs.patch_name }}.pak || true
+          fi
+        env:
+          PATCH_NAME: ${{ github.event.inputs.patch_name }}
+
+      - name: Upload PAK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hh-patch
+          path: out/*.pak
+          if-no-files-found: warn
